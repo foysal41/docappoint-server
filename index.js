@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const dns = require("dns");
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
@@ -14,8 +15,14 @@ const port = process.env.PORT || 8000;
 app.use(cors());
 app.use(express.json());
 
-const uri =
-  "mongodb+srv://docappoint:docappoint@cluster0.8xvidah.mongodb.net/docappointdb?retryWrites=true&w=majority&appName=Cluster0";
+const uri = process.env.MONGO_URI;
+
+
+const JWKS = createRemoteJWKSet(
+      new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+    )
+    console.log(JWKS)
+  
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -24,6 +31,40 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+
+const logger = (req, res, next)=> {
+  console.log(`${req.method} | ${req.url}`);
+  next();
+}
+
+const verifyToken = async (req, res, next) => {
+  const { authorization } = req.headers;
+
+  console.log("Authorization:", authorization);
+
+  const token = authorization?.split(" ")[1];
+
+  if (!token) {
+    console.log("No token found");
+    return res.status(401).json({ message: "Unauthorized: No token" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+
+    console.log("Token verified");
+    console.log("User:", payload);
+
+    req.user = payload;
+    next();
+  } catch (error) {
+    console.log("Token invalid:", error.message);
+    return res.status(401).json({ message: "Unauthorized: Invalid token" });
+  }
+};
+
+
 
 async function run() {
   try {
@@ -34,13 +75,61 @@ async function run() {
     const db = client.db("docappointdb");
     const doctorsCollection = db.collection("doctors");
 
-    app.get("/doctors", async (req, res) => {
-      const result = await doctorsCollection.find().toArray();
-      res.send(result);
+
+
+
+
+
+  app.get("/doctors", async (req, res) => {
+  const { search } = req.query;
+
+  let cursor;
+
+  if (search) {
+    cursor = doctorsCollection.find({
+      $or: [
+        {
+          name: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          specialty: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          hospital: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          location: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+      ],
     });
+  } else {
+    cursor = doctorsCollection.find();
+  }
+
+  const result = await cursor.toArray();
+  res.send(result);
+});
 
 
-    app.get("/doctors/:doctorId" , async(req, res) => {
+
+
+
+
+
+
+    app.get("/doctors/:doctorId" , logger, verifyToken, async(req, res) => {
         const {doctorId} = req.params;
 
         // console.log(doctorId)
@@ -50,8 +139,6 @@ async function run() {
         res.send(result)
 
     })
-
-
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } catch (error) {
