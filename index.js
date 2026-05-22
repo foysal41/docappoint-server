@@ -74,7 +74,7 @@ async function run() {
 
     const db = client.db("docappointdb");
     const doctorsCollection = db.collection("doctors");
-
+const bookingCollection = db.collection("bookings");
 
 
 
@@ -124,11 +124,6 @@ async function run() {
 
 
 
-
-
-
-
-
     app.get("/doctors/:doctorId" , logger, verifyToken, async(req, res) => {
         const {doctorId} = req.params;
 
@@ -139,6 +134,18 @@ async function run() {
         res.send(result)
 
     })
+
+
+
+app.post('/booking', async(req, res)=>{
+  const bookingData = req.body;
+  const result = await bookingCollection.insertOne(bookingData)
+   res.send(result);
+})
+
+
+
+
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } catch (error) {
