@@ -150,7 +150,12 @@ app.get("/booking/:userId" , async (req, res) => {
   res.json(result)
 })
 
+app.delete("/booking/:bookingId" , async (req, res)=> {
+  const {bookingId} = req.params;
+  const result = await bookingCollection.deleteOne({_id:new ObjectId(bookingId)})
+  res.json(result)
 
+})
 
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
